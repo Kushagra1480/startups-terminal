@@ -48,31 +48,12 @@ func loadStartups() tea.Msg {
 	}
 	ctx, cancel := chromedp.NewContext(context.Background())
 	defer cancel()
-
-	previews, err := ScrapeHomepage(ctx)
+	startups, err := ScrapeAllCompanies(ctx)
 	if err != nil {
-		log.Printf("Error scraping homepage: %v", err)
+		log.Printf("Error scraping: %v", err)
 		return startupsLoadedMsg{startups: []*Startup{}}
 	}
 
-	var startups []*Startup
-	for i, preview := range previews {
-		if i >= 20 {
-			break
-		}
-
-		startup, err := ScrapeCompany(ctx, preview.Slug)
-		if err != nil {
-			log.Printf("Error scraping %s: %v", preview.Slug, err)
-			continue
-		}
-
-		if startup.Tagline == "" {
-			startup.Tagline = preview.Tagline
-		}
-
-		startups = append(startups, startup)
-	}
 	SaveCache(startups)
 	return startupsLoadedMsg{startups: startups}
 }

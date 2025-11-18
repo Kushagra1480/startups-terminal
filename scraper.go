@@ -3,19 +3,60 @@ package main
 import (
 	"context"
 	"fmt"
+	"log"
 	"regexp"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/chromedp/chromedp"
 )
+
+func ScrapeAllCompanies(ctx context.Context) ([]*Startup, error) {
+	previews, err := ScrapeHomepage(ctx)
+	if err != nil {
+		return nil, err
+	}
+	startups := make([]*Startup, len(previews))
+	var wg sync.WaitGroup
+	var mu sync.Mutex
+	semaphore := make(chan struct{}, 5)
+	for i, preview := range previews {
+		wg.Add(1)
+		go func(idx int, p CompanyPreview) {
+			defer wg.Done()
+			semaphore <- struct{}{}
+			defer func() { <-semaphore }()
+			allocCtx, cancel := chromedp.NewExecAllocator(context.Background(), append(chromedp.DefaultExecAllocatorOptions[:], chromedp.Flag("headless", true))...)
+			defer cancel()
+			taskCtx, cancel := chromedp.NewContext(allocCtx)
+			defer cancel()
+			startup, err := ScrapeCompany(taskCtx, p.Slug)
+			if err != nil {
+				log.Printf("Error scraping %s: %v", p.Slug, err)
+				return
+			}
+			mu.Lock()
+			startups[idx] = startup
+			mu.Unlock()
+		}(i, preview)
+	}
+	wg.Wait()
+	result := []*Startup{}
+	for _, s := range startups {
+		if s != nil {
+			result = append(result, s)
+		}
+	}
+	return result, nil
+}
 
 func ScrapeHomepage(ctx context.Context) ([]CompanyPreview, error) {
 	var result []interface{}
 
 	err := chromedp.Run(ctx,
 		chromedp.Navigate("https://startups.gallery"),
-		chromedp.Sleep(5*time.Second),
+		chromedp.WaitVisible(`body`, chromedp.ByQuery),
 		chromedp.Evaluate(`
 			Array.from(document.querySelectorAll('a[href*="/companies/"]')).map(card => {
 				const href = card.getAttribute('href');
@@ -116,9 +157,10 @@ func parseCompanyData(slug string, result map[string]interface{}) *Startup {
 		linkMap := link.(map[string]interface{})
 		text := strings.TrimSpace(linkMap["text"].(string))
 		href := linkMap["href"].(string)
-		if text == "Visit Website" {
+		switch text {
+		case "Visit Website":
 			startup.WebsiteURL = href
-		} else if text == "View Jobs" {
+		case "View Jobs":
 			startup.JobsURL = href
 		}
 		if strings.Contains(href, "/categories/locations/") {
