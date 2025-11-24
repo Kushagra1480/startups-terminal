@@ -1,6 +1,7 @@
 # Startups.Terminal
 A TUI for startups.gallery, inspired by the Bloomberg Terminal- browse the trending startups from the comfort of your terminal!
-<img width="900" height="450" alt="image" src="https://github.com/user-attachments/assets/e8fc3d72-d732-4293-b112-838386d30587" />
+<img width="1219" height="897" alt="image" src="https://github.com/user-attachments/assets/85ae9b41-6dfd-4ad0-aac9-891edcfd77fa" />
+
 
 ## Running Instructions:
 Clone the repo and run:
